@@ -137,7 +137,7 @@ label{display:block;font-size:13px;color:var(--muted);margin:12px 0 4px}
 .tabla td{text-align:right;padding:6px 4px;border-top:1px solid var(--line)}.tabla tr[onclick]{cursor:pointer}
 #pcCard{touch-action:pan-y;user-select:none;position:relative}
 #pcHint{position:absolute;top:12px;right:14px;font-weight:700;color:var(--accent);opacity:0;pointer-events:none}
-@media (min-width:700px){.stats{grid-template-columns:1fr 1fr 1fr}.stat.big{grid-column:auto}.stat.big b{font-size:22px}}
+@media (min-width:700px){.stats.flujo{grid-template-columns:1.5fr 1fr 1fr}.stats{grid-template-columns:1fr 1fr 1fr}.stat.big{grid-column:auto}.stat.big b{font-size:22px}}
 .hero{padding:18px 18px 14px}
 .hero .hl{font-size:13px;color:var(--muted)}
 .hero .hv{font-size:40px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.1;margin:4px 0}
@@ -346,6 +346,15 @@ function render(){
   guardarCache();
 }
 
+/* Flujo de caja real: lo que entró y salió de las cuentas (sin compras con tarjeta, con pagos de deuda) */
+function flujoMes(L){
+  const sum=a=>a.reduce((t,x)=>t+clp(x),0), tc=x=>medioTipo(x)==='Crédito';
+  const entro=sum(L.filter(x=>x.tipo==='Ingreso'));
+  const gastos=sum(L.filter(x=>x.tipo==='Egreso'&&!tc(x)));
+  const pagos=sum(L.filter(x=>x.tipo==='Interno'&&/pago\s+(de\s+)?(la\s+)?(tarjeta|l[ií]nea)/i.test(x.descripcion)));
+  const linea=sum(L.filter(x=>x.tipo==='Interno'&&/uso\s+l[ií]nea/i.test(x.descripcion)));
+  return {entro,gastos,pagos,linea,tc:sum(L.filter(x=>x.tipo==='Egreso'&&tc(x))),queda:entro-gastos-pagos};
+}
 function analisisMesHTML(){
   const L=delMes(mes), T=totales(L);
   const porCat={};
@@ -416,11 +425,21 @@ function analisisMesHTML(){
   ${pleg('bancos','Por banco y cuenta',Object.entries(bancos).map(([b,cs])=>`<div class="banco">${esc(b)}</div>${cs.map(([c,k])=>`<div class="cta" onclick="verCuenta('${esc(k)}')"><span>${esc(c)}</span><span><span class="ing">${PC[k].i?'+'+fmt(PC[k].i):''}</span> <span class="egr">${PC[k].g?'-'+fmt(PC[k].g):''}</span></span></div>`).join('')}`).join('')||'<div class="empty">Sin movimientos</div>')}
   <div class="card sync ajustes"><span>Correo revisado: ${ult}</span>
     <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${ES_PWA?'<button onclick="verSeguridad()">🔒 Seguridad</button>':'<button onclick="instalarApp(this)">📱 Instalar app</button>'}<button onclick="verResumenMes(-1)">📊 Resumen</button><button onclick="cambiarTema()">${TEMAS[tema]}</button><button onclick="verCategorias()">🏷️ Categorías</button><button onclick="sincronizar(this)">↻ Revisar</button></span></div>`;
-  return `<div class="stats">
-    <div class="stat big"><small>Resultado del mes</small><b class="${T.bal>=0?'ing':'egr'}">${fmt(T.bal)}</b></div>
+  const F=flujoMes(L);
+  return `<div class="stats flujo">
+    <div class="stat big"><small>Plata que te quedó</small><b class="${F.queda>=0?'ing':'egr'}">${F.queda>0?'+':''}${fmt(F.queda)}</b>
+      <div style="margin-top:8px">
+        <div class="kv"><span>Entró a tus cuentas</span><span class="ing">+${fmt(F.entro)}</span></div>
+        <div class="kv" onclick="verMedio('Débito')" style="cursor:pointer"><span>Gastos con débito y efectivo ›</span><span class="egr">−${fmt(F.gastos)}</span></div>
+        <div class="kv" onclick="verMedio('Traspaso')" style="cursor:pointer"><span>Pagos de tarjeta y línea ›</span><span class="egr">−${fmt(F.pagos)}</span></div>
+      </div>
+      ${F.linea?`<div class="mini" style="margin-top:4px">⚠️ Además usaste ${fmt(F.linea)} de la línea de crédito para cubrir gastos cuando la cuenta quedó en cero (es deuda nueva).</div>`:''}
+      <small style="margin-top:6px">Es lo que debería cuadrar con tu banco: cuánto subió o bajó la plata en tus cuentas este mes.${F.tc?` Las compras con tarjeta (${fmt(F.tc)}) salen de tu cuenta recién cuando pagas la factura.`:''}</small></div>
     <div class="stat"><small>Ingresos</small><b class="ing">${fmt(T.ing)}</b></div>
-    <div class="stat"><small>Gastos</small><b class="egr">${fmt(T.egr)}</b></div>
-  </div><div class="cols"><div>${B.split('<!--COL-->')[0]}</div><div>${B.split('<!--COL-->')[1]||''}</div></div>`;
+    <div class="stat"><small>Gastos</small><b class="egr">${fmt(T.egr)}</b><small>Incluye compras con tarjeta</small></div>
+  </div>
+  <div class="mini" style="margin:-4px 4px 12px">Ganaste − gastaste: <b class="${T.bal>=0?'ing':'egr'}">${fmt(T.bal)}</b>. No cuenta los pagos de deudas antiguas, por eso no es lo mismo que la plata que te quedó.</div>
+  <div class="cols"><div>${B.split('<!--COL-->')[0]}</div><div>${B.split('<!--COL-->')[1]||''}</div></div>`;
 }
 
 function subsHTML(o,v){if(!o)return '';const E=Object.entries(o).sort((a,b)=>b[1]-a[1]),r=v-E.reduce((a,x)=>a+x[1],0);
