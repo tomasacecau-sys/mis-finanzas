@@ -730,6 +730,7 @@ function editar(id){
     <div style="font-size:26px;font-weight:700;margin:10px 0" class="${x.tipo==='Ingreso'?'ing':x.tipo==='Egreso'?'egr':'int'}">${x.moneda==='USD'?'US$'+x.monto:fmt(x.monto)}</div>
     <label>Tipo</label><select class="in" id="eTipo">${['Egreso','Ingreso','Interno'].map(t=>`<option ${t===x.tipo?'selected':''}>${t}</option>`).join('')}</select>
     <label>Categoría</label><select class="in" id="eCat" onchange="if(this.value==='__nueva'){this.value='${esc(x.categoria)}';editarCategoria('',document.getElementById('eTipo').value==='Ingreso'?'Ingreso':'Gasto','','${esc(x.id)}')}">${ordenarCats(D.categorias).map(c=>`<option ${c===x.categoria?'selected':''}>${esc(c)}</option>`).join('')}<option value="__nueva">＋ Nueva categoría…</option></select>
+    <label>Fecha</label><input class="in" type="date" id="eFecha" value="${isoLocal(x.fecha)}">
     <label>Nota</label><input class="in" id="eNota" value="${esc(x.nota)}" placeholder="Ej: regalo cumpleaños">
     <label>Proyecto</label><select class="in" id="eProy"><option value="">— Ninguno —</option>${(D.proyectos||[]).map(p=>`<option ${p.nombre===x.proyecto?'selected':''}>${esc(p.nombre)}</option>`).join('')}</select>
     ${x.tipo==='Egreso'&&medioTipo(x)==='Crédito'?(()=>{const c=(D.cuotas||[]).find(k=>k.idMov===x.id);return `
@@ -747,7 +748,7 @@ async function guardarEdicion(id,b){
   b.disabled=true;b.textContent='Guardando…';
   try{
     D=await call('actualizarMovimiento',id,{tipo:document.getElementById('eTipo').value,categoria:document.getElementById('eCat').value,
-      nota:document.getElementById('eNota').value,proyecto:document.getElementById('eProy').value||(x.proyecto?'—':'')},document.getElementById('eRegla').checked);
+      nota:document.getElementById('eNota').value,fecha:document.getElementById('eFecha').value!==isoLocal(x.fecha)?document.getElementById('eFecha').value:'',proyecto:document.getElementById('eProy').value||(x.proyecto?'—':'')},document.getElementById('eRegla').checked);
     const ec=document.getElementById('eCuo');
     if(ec){const n=Number(ec.value),c=(D.cuotas||[]).find(k=>k.idMov===id);
       if(n>1||c)D=await call('guardarCuota',{idMov:id,borrar:n<=1,fecha:isoLocal(x.fecha),descripcion:x.descripcion,monto:clp(x),n,tasa:Number(String(document.getElementById('eTasa').value).replace(',','.'))||0});}
