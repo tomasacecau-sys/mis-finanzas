@@ -203,6 +203,29 @@ details.pleg[open]>summary{margin-bottom:10px}
 #lock .pad button:active{background:var(--line)}
 .cols>div{min-width:0}
 .narrow{max-width:760px;margin:0 auto}
+/* ---- Ajuste celular ---- */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
+.sheet{max-height:88dvh}
+@media (max-width:999px){
+  .wrap{padding-left:calc(14px + env(safe-area-inset-left));padding-right:calc(14px + env(safe-area-inset-right));padding-bottom:calc(120px + env(safe-area-inset-bottom))}
+  input,select,textarea,.in,.search{font-size:16px}
+}
+@media (max-width:480px){
+  header{margin-bottom:12px}
+  h1{font-size:17px;gap:7px;min-width:0}
+  .mes span{min-width:0;font-size:14px}
+  .ajustes{flex-direction:column;align-items:stretch;text-align:center}
+  .ajustes>span:last-child{display:grid!important;grid-template-columns:1fr 1fr;gap:8px}
+  .ajustes button{padding:11px 8px;font-size:14px}
+  .ajustes button:last-child:nth-child(odd){grid-column:1/-1}
+}
+.pillb{white-space:nowrap}
+@media (max-width:360px){
+  h1{font-size:0;gap:0}
+  .pillb{font-size:12px;padding:5px 9px}
+  .mes span{font-size:13px}
+}
 @media (min-width:1000px){
   .wrap{max-width:1180px;padding:24px 28px 120px}
   .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
@@ -248,7 +271,7 @@ const fmt=n=>(n<0?'-':'')+'$'+Math.round(Math.abs(n)).toLocaleString('es-CL');
 const clp=m=>m.moneda==='USD'?m.monto*(D.usdClp||950):m.monto;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const mismoMes=(f,m)=>f.getFullYear()===m.getFullYear()&&f.getMonth()===m.getMonth();
-const nombreMes=(m,corto)=>m.toLocaleDateString('es-CL',corto?{month:'short'}:{month:'long',year:'numeric'});
+const nombreMes=(m,corto)=>corto?m.toLocaleDateString('es-CL',{month:'short'}):m.toLocaleDateString('es-CL',{month:'long'})+' '+m.getFullYear();
 function medioTipo(x){if(x.tipo==='Interno')return 'Traspaso';if(x.tipo==='Ingreso')return 'Ingreso';const m=String(x.medio||'');if(/cr[eé]dito|\bTC\b/i.test(m))return 'Crédito';if(/efectivo/i.test(m))return 'Efectivo';return 'Débito';}
 const BADGE={'Crédito':'💳 Crédito','Débito':'🏦 Débito','Efectivo':'💵 Efectivo','Traspaso':'🔁 Traspaso','Ingreso':'⬇️ Ingreso'};
 const BCLS={'Crédito':'cr','Débito':'de','Efectivo':'de','Traspaso':'tr','Ingreso':'in'};
@@ -391,7 +414,7 @@ function analisisMesHTML(){
     </div>
     <div class="cta" style="margin-top:10px" onclick="verMedio('Traspaso')"><span>🔁 ${TR.length} traspaso(s) entre cuentas y pagos de tarjeta (no son gasto)</span><b>${fmt(tt)}</b></div>`)}
   ${pleg('bancos','Por banco y cuenta',Object.entries(bancos).map(([b,cs])=>`<div class="banco">${esc(b)}</div>${cs.map(([c,k])=>`<div class="cta" onclick="verCuenta('${esc(k)}')"><span>${esc(c)}</span><span><span class="ing">${PC[k].i?'+'+fmt(PC[k].i):''}</span> <span class="egr">${PC[k].g?'-'+fmt(PC[k].g):''}</span></span></div>`).join('')}`).join('')||'<div class="empty">Sin movimientos</div>')}
-  <div class="card sync"><span>Correo revisado: ${ult}</span>
+  <div class="card sync ajustes"><span>Correo revisado: ${ult}</span>
     <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${ES_PWA?'<button onclick="verSeguridad()">🔒 Seguridad</button>':'<button onclick="instalarApp(this)">📱 Instalar app</button>'}<button onclick="verResumenMes(-1)">📊 Resumen</button><button onclick="cambiarTema()">${TEMAS[tema]}</button><button onclick="verCategorias()">🏷️ Categorías</button><button onclick="sincronizar(this)">↻ Revisar</button></span></div>`;
   return `<div class="stats">
     <div class="stat big"><small>Resultado del mes</small><b class="${T.bal>=0?'ing':'egr'}">${fmt(T.bal)}</b></div>
