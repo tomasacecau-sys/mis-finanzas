@@ -1524,7 +1524,7 @@ function ceroCC(){
   const fin=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate(), d0=hoy.getDate();
   const F=fijos(), kf=new Set(F.filter(f=>f.tipo==='Egreso').map(f=>f.k));
   const t60=new Date(hoy.getTime()-60*864e5);
-  const vari=D.movs.filter(x=>x.tipo==='Egreso'&&cuentaDe(x)===c&&medioTipo(x)!=='Crédito'&&!x.proyecto&&!kf.has(claveFijo(x))&&clp(x)<150000&&new Date(x.fecha)>=t60&&new Date(x.fecha)<hoy).reduce((a,x)=>a+clp(x),0);
+  const vari=D.movs.filter(x=>x.tipo==='Egreso'&&cuentaDe(x)===c&&medioTipo(x)!=='Crédito'&&!x.proyecto&&padre(x.categoria)!==CAT_INT&&!kf.has(claveFijo(x))&&clp(x)<150000&&new Date(x.fecha)>=t60&&new Date(x.fecha)<hoy).reduce((a,x)=>a+clp(x),0);
   const diario=vari/60;
   const fijosCC=F.filter(f=>f.tipo==='Egreso'&&!f.pagado&&f.dia>d0).filter(f=>{const m=D.movs.slice().reverse().find(x=>claveFijo(x)===f.k);return m&&cuentaDe(m)===c});
   let s=v.s,dia=null;
