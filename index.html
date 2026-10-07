@@ -221,6 +221,15 @@ body{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
   .ajustes button:last-child:nth-child(odd){grid-column:1/-1}
 }
 .pillb{white-space:nowrap}
+.alerta.txt span{white-space:normal;font-weight:400}
+.cqm{border-top:1px dashed var(--line);margin-top:10px;padding-top:8px}.cqm .row{margin-top:6px;align-items:center}.cqm .in{margin-top:0}
+#printArea{display:none}
+@media print{body.imprimiendo>*:not(#printArea){display:none!important}body.imprimiendo #printArea{display:block!important;color:#000;background:#fff;font:12px/1.4 Inter,Arial,sans-serif}
+  #printArea h1{font-size:20px;margin:0 0 10px}#printArea h2{font-size:14px;margin:16px 0 6px}#printArea table{width:100%;border-collapse:collapse}
+  #printArea td,#printArea th{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}#printArea td:last-child,#printArea th:last-child{text-align:right}
+  #printArea .pie{color:#666;margin-top:14px}.noprint{display:none!important}}
+body.imprimiendo>*:not(#printArea){display:none!important}body.imprimiendo #printArea{display:block;padding:16px;background:var(--card)}
+#printArea table{width:100%;border-collapse:collapse}#printArea td,#printArea th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left}#printArea td:last-child,#printArea th:last-child{text-align:right}
 @media (max-width:360px){
   h1{font-size:0;gap:0}
   .pillb{font-size:12px;padding:5px 9px}
@@ -349,11 +358,11 @@ function render(){
 /* Flujo de caja real: lo que entró y salió de las cuentas (sin compras con tarjeta, con pagos de deuda) */
 function flujoMes(L){
   const sum=a=>a.reduce((t,x)=>t+clp(x),0), tc=x=>medioTipo(x)==='Crédito';
-  const entro=sum(L.filter(x=>x.tipo==='Ingreso'));
+  const entro=sum(L.filter(x=>x.tipo==='Ingreso'&&x.categoria!=='Reembolso')), reemb=sum(L.filter(x=>x.tipo==='Ingreso'&&x.categoria==='Reembolso'));
   const gastos=sum(L.filter(x=>x.tipo==='Egreso'&&!tc(x)));
   const pagos=sum(L.filter(x=>x.tipo==='Interno'&&/pago\s+(de\s+)?(la\s+)?(tarjeta|l[ií]nea)/i.test(x.descripcion)));
   const linea=sum(L.filter(x=>x.tipo==='Interno'&&/uso\s+l[ií]nea/i.test(x.descripcion)));
-  return {entro,gastos,pagos,linea,tc:sum(L.filter(x=>x.tipo==='Egreso'&&tc(x))),queda:entro-gastos-pagos};
+  return {entro,reemb,gastos,pagos,linea,tc:sum(L.filter(x=>x.tipo==='Egreso'&&tc(x))),queda:entro+reemb-gastos-pagos};
 }
 function analisisMesHTML(){
   const L=delMes(mes), T=totales(L);
@@ -410,6 +419,7 @@ function analisisMesHTML(){
     ${cats.length&&Object.keys(ant).length?'<div class="mini" style="margin-top:6px">↑↓ comparado con el mes anterior.</div>':''}`)}
   ${esteMes()?plegCard('proy',proyeccionHTML(T)):''}
   ${plegCard('fijos',fijosHTML())}
+  ${suscripcionesHTML()}
   ${plegCard('cal',calendarioHTML(L))}
 <!--COL-->
   ${pleg('top','Mayores gastos del mes',top.length?top.map(itemHTML).join(''):'<div class="empty">—</div>')}
@@ -424,12 +434,13 @@ function analisisMesHTML(){
     <div class="cta" style="margin-top:10px" onclick="verMedio('Traspaso')"><span>🔁 ${TR.length} traspaso(s) entre cuentas y pagos de tarjeta (no son gasto)</span><b>${fmt(tt)}</b></div>`)}
   ${pleg('bancos','Por banco y cuenta',Object.entries(bancos).map(([b,cs])=>`<div class="banco">${esc(b)}</div>${cs.map(([c,k])=>`<div class="cta" onclick="verCuenta('${esc(k)}')"><span>${esc(c)}</span><span><span class="ing">${PC[k].i?'+'+fmt(PC[k].i):''}</span> <span class="egr">${PC[k].g?'-'+fmt(PC[k].g):''}</span></span></div>`).join('')}`).join('')||'<div class="empty">Sin movimientos</div>')}
   <div class="card sync ajustes"><span>Correo revisado: ${ult}</span>
-    <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${ES_PWA?'<button onclick="verSeguridad()">🔒 Seguridad</button>':'<button onclick="instalarApp(this)">📱 Instalar app</button>'}<button onclick="verResumenMes(-1)">📊 Resumen</button><button onclick="cambiarTema()">${TEMAS[tema]}</button><button onclick="verCategorias()">🏷️ Categorías</button><button onclick="sincronizar(this)">↻ Revisar</button></span></div>`;
+    <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${ES_PWA?'<button onclick="verSeguridad()">🔒 Seguridad</button>':'<button onclick="instalarApp(this)">📱 Instalar app</button>'}<button onclick="verCuadre()">🧮 Cuadrar</button><button onclick="verExportar()">⬇️ Exportar</button><button onclick="verResumenMes(-1)">📊 Resumen</button><button onclick="cambiarTema()">${TEMAS[tema]}</button><button onclick="verCategorias()">🏷️ Categorías</button><button onclick="sincronizar(this)">↻ Revisar</button></span></div>`;
   const F=flujoMes(L);
   return `<div class="stats flujo">
     <div class="stat big"><small>Plata que te quedó</small><b class="${F.queda>=0?'ing':'egr'}">${F.queda>0?'+':''}${fmt(F.queda)}</b>
       <div style="margin-top:8px">
         <div class="kv"><span>Entró a tus cuentas</span><span class="ing">+${fmt(F.entro)}</span></div>
+        ${F.reemb?`<div class="kv"><span>Te pagaron lo que te debían</span><span class="ing">+${fmt(F.reemb)}</span></div>`:''}
         <div class="kv" onclick="verMedio('Débito')" style="cursor:pointer"><span>Gastos con débito y efectivo ›</span><span class="egr">−${fmt(F.gastos)}</span></div>
         <div class="kv" onclick="verMedio('Traspaso')" style="cursor:pointer"><span>Pagos de tarjeta y línea ›</span><span class="egr">−${fmt(F.pagos)}</span></div>
       </div>
@@ -560,6 +571,12 @@ function alertas(){
   Object.keys(P).filter(k=>k!=='Total'&&(g[k]||0)>=P[k]*0.8&&(g[k]||0)<=P[k]).forEach(k=>A.push({cls:'al',txt:`${ico(k)} ${esc(k)}: ${Math.round(g[k]/P[k]*100)}% del tope`,go:`verCat('${esc(k)}')`}));
   const sug=sugerirReembolsos();if(sug.length)A.push({cls:'info',txt:`↩️ ${sug.length===1?'Hay transferencias':'Hay grupos de transferencias'} que podrían ser reembolsos`,go:`verReembolsos()`});
   if(hoy.getDate()<=7){const m=new Date(hoy.getFullYear(),hoy.getMonth()-1,1),k=m.getFullYear()+'-'+m.getMonth();if(lsGet('resumenVisto')!==k&&delMes(m).length)A.unshift({cls:'info',txt:`📊 Tu resumen de ${m.toLocaleDateString('es-CL',{month:'long'})} está listo`,go:`verResumenMes(-1)`})}
+  if(esteMes()){
+    const z=ceroCC();if(z&&!z.ok)A.push({cls:z.dia-hoy.getDate()<=5?'ex':'al',txt:`⚠️ Tu cuenta corriente llegaría a $0 cerca del día ${z.dia}, antes del sueldo`,go:`ir('pro')`});
+    if(faltanIntereses()){const e=estimarIntereses();A.push({cls:'al',txt:`🏦 ¿Ya te cobraron los intereses de la línea?${e?` (≈ ${fmt(e)})`:''} Agrégalos`,go:`agregarIntereses()`})}
+    if(cuadreViejo())A.push({cls:'info',txt:`🧮 Cuadra tus cuentas con el banco (1 minuto)`,go:`verCuadre()`});
+    pagosSugeridos().forEach((s,i)=>A.push({cls:'info',txt:`↩️ ¿${esc(s.d.persona)} te pagó ${fmt(clp(s.x))}?`,go:`confirmarPagoSug(${i})`}));
+  }
   const o={ex:0,al:1,info:2};return A.sort((a,b)=>o[a.cls]-o[b.cls]);
 }
 function verAlertas(){const A=alertas();document.getElementById('sheet').innerHTML=`<h3>Avisos</h3><div style="margin-top:10px">${A.map(a=>`<div class="alerta ${a.cls}" onclick="cerrar();${a.go}"><span>${a.txt}</span><span>›</span></div>`).join('')}</div><button class="btn sec" onclick="cerrar()">Cerrar</button>`;document.getElementById('sheetBg').classList.add('show')}
@@ -571,6 +588,7 @@ function verCuentas(){
     <div style="margin-top:10px">${r.map(x=>`<div class="cta" onclick="editSaldo(${x.i})"><span>${esc(x.c)}</span><b>${x.v?fmt(x.v.s):'Ingresar'}</b></div>`).join('')}</div>
     <div class="kv tot"><span>Disponible</span><span class="${tot>=0?'ing':'egr'}">${fmt(tot)}</span></div>
     ${deu.tc?`<div class="kv"><span>Deuda tarjeta (estimada)</span><span class="egr">-${fmt(deu.tc.total)}</span></div><div class="kv tot"><span>Patrimonio líquido</span><span class="${tot-deu.tc.total>=0?'ing':'egr'}">${fmt(tot-deu.tc.total)}</span></div>`:''}
+    <button class="btn" onclick="verCuadre()">🧮 Cuadrar con el banco</button>
     <div class="mini" style="margin-top:12px">Este mes: entraron ${fmt(T.ing)} y gastaste ${fmt(T.egr)} (resultado ${fmt(T.bal)}). El resultado no es plata disponible: el sueldo de fin de mes cuenta para el mes siguiente.</div>
     <button class="btn sec" onclick="cerrar()">Cerrar</button>`;
   document.getElementById('sheetBg').classList.add('show');
@@ -603,7 +621,7 @@ function vResumen(){
     <button class="tile" onclick="ir('pro')"><span class="mini">Tarjeta</span><b>${deu.tc?fmt(deu.tc.total):'—'}</b><span class="mini">${pl?`$0 en ${mesK(calcPlan(pl,pl.extra).fin)}`:'sin plan'}</span></button>
   </div>
   </div><div>
-  <div class="card"><div class="sync" style="margin-bottom:6px"><h2 style="margin:0">Últimos movimientos</h2>${nP?`<button class="pillb" onclick="filtroCat='';filtroCuenta='';filtro='Por clasificar';ir('mov')">${nP} por clasificar</button>`:''}</div>
+  <div class="card"><div class="sync" style="margin-bottom:6px"><h2 style="margin:0">Últimos movimientos</h2>${nP?`<button class="pillb" onclick="verClasificar()">${nP} por clasificar</button>`:''}</div>
     ${ult.map(itemHTML).join('')||'<div class="empty">Sin movimientos</div>'}
     <button class="link" style="margin-top:6px" onclick="filtro='Todos';ir('mov')">Ver todos ›</button></div>
   <div class="upd">Correo revisado ${hace(D.ultimaRevision)} · <button class="link" onclick="sincronizar(this)">Revisar ahora</button></div>
@@ -756,12 +774,14 @@ function editar(id){
     <label>Compra en cuotas</label><div class="row"><select class="in" id="eCuo"><option value="1">Sin cuotas</option>${[2,3,4,5,6,8,10,12,18,24,36,48].map(n=>`<option ${c&&c.n===n?'selected':''} value="${n}">${n} cuotas</option>`).join('')}</select>
       <input class="in" id="eTasa" inputmode="decimal" placeholder="Interés % mensual" value="${c&&c.tasa?c.tasa:''}"></div>`})():''}
     <label class="check"><input type="checkbox" id="eRegla"> Usar siempre esta categoría para «${esc(x.descripcion)}»</label>
+    ${x.tipo==='Egreso'?`<button class="btn sec" onclick="nuevaDeuda({concepto:'${esc(x.descripcion)}',monto:${Math.round(clp(x))},fecha:'${isoLocal(x.fecha)}',idMov:'${esc(x.id)}'})">👥 Alguien me debe parte de esto</button>`:''}
+    ${x.tipo==='Ingreso'&&deudasPend().some(d=>d.pend>0)&&!movsVinculados().has(x.id)?`<button class="btn sec" onclick="elegirDeudaParaMov('${esc(x.id)}')">↩️ Es un pago de lo que me deben</button>`:''}
     <button class="btn" onclick="guardarEdicion('${esc(x.id)}',this)">Guardar cambios</button>
     <button class="btn del" onclick="borrar('${esc(x.id)}')">Eliminar movimiento</button>
     <button class="btn sec" onclick="cerrar()">Cancelar</button>`;
   document.getElementById('sheetBg').classList.add('show');
 }
-function cerrar(){document.getElementById('sheetBg').classList.remove('show')}
+function cerrar(){modoClas=false;document.getElementById('sheetBg').classList.remove('show')}
 async function guardarEdicion(id,b){
   const x=D.movs.find(m=>m.id===id);
   b.disabled=true;b.textContent='Guardando…';
@@ -902,7 +922,7 @@ function fijos(){
     const meses=Object.keys(pm).map(Number);
     const previos=meses.filter(m=>m<act);
     if(k!=='I|SUELDO'){
-      if(['Supermercado','Delivery','Comida y restaurantes'].includes(L[0].categoria))return;   // gasto del día a día
+      if(['Supermercado','Delivery','Comida y restaurantes','Intereses y comisiones'].includes(padre(L[0].categoria)))return;   // gasto del día a día
       const fija=['Servicios y cuentas','Suscripciones y entretención','Vivienda','Educación','Salud'].includes(L[0].categoria);
       if(meses.length<(fija?2:3)||!previos.length)return;
       if(Object.values(pm).some(a=>a.length>2))return;                 // compras frecuentes (bencina, súper): no son fijos
@@ -988,7 +1008,7 @@ function fechasProy(p){if(!p.desde&&!p.hasta)return 'Sin fechas';const f=d=>d?ne
 function vProyectos(){
   if(proySel){const p=(D.proyectos||[]).find(k=>k.nombre===proySel);if(p)return vProyecto(p);proySel=''}
   const P=D.proyectos||[];
-  return `<div class="cols"><div>${presupuestosHTML(true)}${proximosHTML()}${metaAhorroHTML()}</div><div>${planTarjetaHTML()}${deudaHTML()}<h2 style="margin:18px 4px 10px">Proyectos y viajes</h2>${P.map(p=>{const r=resumenProy(p);return `<div class="card pcard" onclick="abrirProy('${esc(p.nombre)}')">
+  return `<div class="cols"><div>${presupuestosHTML(true)}${proximosHTML()}${meDebenHTML()}${metaAhorroHTML()}</div><div>${deudaHTML()}${planTarjetaHTML()}<h2 style="margin:18px 4px 10px">Proyectos y viajes</h2>${P.map(p=>{const r=resumenProy(p);return `<div class="card pcard" onclick="abrirProy('${esc(p.nombre)}')">
       <div class="sync" style="font-size:15px;color:var(--text)"><b>✈ ${esc(p.nombre)}</b><b class="egr">${fmt(r.gasto)}</b></div>
       <div class="mini" style="margin-top:2px">${fechasProy(p)} · ${r.L.length} movimiento(s)${r.usd?' · US$'+r.usd.toLocaleString('es-CL'):''}</div>
       ${p.presupuesto?barra('Presupuesto',r.gasto,p.presupuesto):''}</div>`}).join('')||'<div class="empty">Aún no tienes proyectos</div>'}
@@ -997,14 +1017,6 @@ function vProyectos(){
 }
 function abrirProy(n){proySel=n;render();window.scrollTo(0,0)}
 
-function deudaHTML(){
-  const deu=deudas();
-  return `<div class="card"><h2>Otras deudas</h2>
-    <div class="cta" style="cursor:default"><span>Línea de crédito</span><b class="${deu.linea&&deu.linea.base?'egr':'ing'}">${deu.linea?fmt(deu.linea.base):'Sin datos'}</b></div>
-    ${deu.linea?`<div class="mini" style="margin:-2px 4px 8px">Utilizado según tu último pago (${deu.linea.f}). El uso posterior no llega por correo.</div>`:''}
-    ${deu.tc?`<div class="mini" style="margin:0 4px 8px">Tarjeta: saldo informado al pagar el ${deu.tc.f} (${fmt(deu.tc.base)}) + compras posteriores (${fmt(deu.tc.nuevas)}).</div>`:''}
-    ${cuotasHTML()}</div>`;
-}
 function metaAhorroHTML(){
   const meta=2700000, c=ctasSaldo().find(x=>/Ahorro/i.test(x)), v=c?saldoCta(c):null, s=v?Math.max(0,v.s):0, pc=Math.min(1,s/meta);
   const pl=D.planTarjeta, mens=150000, faltan=Math.ceil((meta-s)/mens);
@@ -1120,9 +1132,9 @@ function pendientesHTML(){
   const P=pendientes();if(!P.length)return '';
   const x=P.find(p=>!saltados.has(p.id))||P[0];
   const cl=claveSug(x.descripcion), n=Math.max(1,similares(cl).length);
-  const cats=x.tipo==='Ingreso'?catsIngreso():catsGasto();
+  const sg=sugerirCat(x), uso=usoCats(x.tipo);
+  const cats=(x.tipo==='Ingreso'?catsIngreso():catsGasto()).slice().sort((a,b)=>(b===sg)-(a===sg)||(uso[b]||0)-(uso[a]||0));
   const f=new Date(x.fecha);
-  const sg=sugerirCat(x);
   return `<div class="card" id="pcCard" data-id="${esc(x.id)}" data-sug="${esc(sg)}" style="border-color:var(--accent)"><span id="pcHint"></span><h2>¿A qué lo atribuyes? <span style="text-transform:none;font-weight:400">· ${P.length} por clasificar</span></h2>
     <div style="font-size:17px;font-weight:700">${esc(x.descripcion)}</div>
     <div class="mini">${f.toLocaleDateString('es-CL',{weekday:'short',day:'numeric',month:'short'})} · ${esc(x.medio)}${x.nota?' · '+esc(x.nota):''}</div>
@@ -1133,16 +1145,16 @@ function pendientesHTML(){
     ${(D.proyectos||[]).length?`<select class="in" id="pcProy" style="margin-top:8px"><option value="">Sin proyecto</option>${D.proyectos.map(p=>`<option>${esc(p.nombre)}</option>`).join('')}</select>`:''}
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">${cats.map(c=>`<button class="chip pc-chip" onclick="clasificarP('${esc(x.id)}','${esc(c)}')">${ico(c)} ${esc(c)}</button>`).join('')}<button class="chip" style="border-style:dashed" onclick="editarCategoria('','${x.tipo==='Ingreso'?'Ingreso':'Gasto'}','${esc(x.id)}')">＋ Nueva categoría</button></div>
     <div class="mini" style="margin-top:10px">${sg?`Sugerencia: <b>${ico(sg)} ${esc(sg)}</b> · desliza → para aceptarla, ← para dejarlo para después.`:'Desliza ← para dejarlo para después.'}</div>
-    <div class="sync" style="margin-top:6px"><button onclick="saltarP('${esc(x.id)}')">Ahora no</button><button onclick="filtroCat='';filtroCuenta='';filtro='Por clasificar';ir('mov')">Ver todos</button></div>
+    <div class="sync" style="margin-top:6px"><button onclick="saltarP('${esc(x.id)}')">Ahora no</button><button onclick="cerrar();filtroCat='';filtroCuenta='';filtro='Por clasificar';ir('mov')">Ver todos</button></div>
   </div>`;
 }
 async function clasificarP(id,cat){
   const clave=document.getElementById('pcClave').value.trim(), pr=document.getElementById('pcProy');
   const n=Math.max(1,similares(clave).length);
   document.querySelectorAll('.pc-chip').forEach(e=>e.disabled=true);
-  try{D=await call('clasificarMovimiento',id,cat,clave,pr?pr.value:'');render();toast(n>1?`${cat} ✓ · ${n} movimientos`:`${cat} ✓`)}catch(e){render()}
+  try{D=await call('clasificarMovimiento',id,cat,clave,pr?pr.value:'');render();if(modoClas)pintarClas();toast(n>1?`${cat} ✓ · ${n} movimientos`:`${cat} ✓`)}catch(e){render();if(modoClas)pintarClas()}
 }
-function saltarP(id){saltados.add(id);if(pendientes().every(p=>saltados.has(p.id)))saltados.clear();render()}
+function saltarP(id){saltados.add(id);if(pendientes().every(p=>saltados.has(p.id)))saltados.clear();render();if(modoClas)pintarClas()}
 
 /* ---- Categorías propias ---- */
 const SEP=' › ';
@@ -1321,6 +1333,295 @@ function initSwipe(){
   el.addEventListener('pointermove',e=>{if(x0===null)return;dx=e.clientX-x0;el.style.transform=`translateX(${dx}px) rotate(${dx/40}deg)`;
     const h=document.getElementById('pcHint');h.style.opacity=Math.min(1,Math.abs(dx)/90);h.textContent=dx>0?(el.dataset.sug?'✓ '+el.dataset.sug:'Sin sugerencia'):'⟵ Ahora no';});
   el.addEventListener('pointerup',fin);el.addEventListener('pointercancel',fin);
+}
+
+/* ===================== A1 · Cuadre mensual con el banco ===================== */
+const CAT_INT='Intereses y comisiones';
+const ctaCC=()=>ctasSaldo().find(c=>/Cuenta Corriente/i.test(c));
+const medioDe=c=>{const m=D.movs.slice().reverse().find(x=>cuentaDe(x)===c&&x.origen==='Correo');return m?m.medio:c};
+const sheetOn=()=>document.getElementById('sheetBg').classList.contains('show');
+const abrirSheet=h=>{document.getElementById('sheet').innerHTML=h;document.getElementById('sheetBg').classList.add('show')};
+let cuadre=null;
+function verCuadre(){
+  cuadre=ctasSaldo().map(c=>{const v=saldoCta(c);return {c,app:v?Math.round(v.s):0,tiene:!!v,banco:'',movs:[]}});
+  abrirSheet(`<h3>🧮 Cuadrar con el banco</h3>
+    <div class="mini">Abre la app de tu banco y escribe el saldo que ves <b>ahora</b> en cada cuenta. Si algo no calza, te ayudo a encontrar qué falta (lo típico: intereses de la línea o transferencias que no avisan por correo). Deja en blanco las que no quieras revisar.</div>
+    ${cuadre.map((r,i)=>`<div class="card cq" style="margin-top:10px">
+      <div class="sync" style="color:var(--text)"><b>${esc(corto(r.c))}</b><span class="mini">En la app: ${r.tiene?fmt(r.app):'sin saldo'}</span></div>
+      <input class="in" inputmode="numeric" placeholder="Saldo en el banco" oninput="cuadre[${i}].banco=this.value.replace(/[^\\d-]/g,'');pintarCq(${i})">
+      <div id="cq${i}"></div></div>`).join('')}
+    <button class="btn" onclick="guardarCuadre(this)">Guardar</button><button class="btn sec" onclick="cerrar()">Cancelar</button>`);
+}
+const ajusteCq=r=>r.movs.reduce((a,m)=>a+(m.tipo==='Ingreso'?1:-1)*(Number(m.monto)||0),0);
+const restoCq=r=>r.banco===''?null:Number(r.banco)-r.app-ajusteCq(r);
+function pintarCq(i){
+  const r=cuadre[i],el=document.getElementById('cq'+i);if(!el)return;
+  if(r.banco===''){el.innerHTML='';return}
+  el.innerHTML=`${r.movs.map((m,j)=>`<div class="cqm">
+      <div class="row"><input class="in" placeholder="¿Qué fue? Ej: Transf. a Matías" value="${esc(m.descripcion)}" oninput="cuadre[${i}].movs[${j}].descripcion=this.value">
+        <input class="in" style="max-width:120px" inputmode="numeric" value="${m.monto}" oninput="cuadre[${i}].movs[${j}].monto=this.value.replace(/\\D/g,'');pintarRestoCq(${i})"></div>
+      <div class="row"><select class="in" onchange="cuadre[${i}].movs[${j}].categoria=this.value">${(m.tipo==='Ingreso'?catsIngreso():catsGasto()).map(c=>`<option ${c===m.categoria?'selected':''}>${esc(c)}</option>`).join('')}</select>
+        <input class="in" type="date" style="max-width:150px" value="${m.fecha}" onchange="cuadre[${i}].movs[${j}].fecha=this.value">
+        <button class="x" onclick="cuadre[${i}].movs.splice(${j},1);pintarCq(${i})" aria-label="Quitar">✕</button></div>
+      <div class="mini">${m.tipo==='Ingreso'?'Entrada':'Salida'} de ${esc(corto(r.c))}</div></div>`).join('')}
+    <div id="cqr${i}"></div>`;
+  pintarRestoCq(i);
+}
+function pintarRestoCq(i){
+  const r=cuadre[i],d=restoCq(r),el=document.getElementById('cqr'+i);if(!el)return;
+  if(Math.abs(d)<1){el.innerHTML=`<div class="okmsg" style="margin-top:8px">✓ ${r.movs.length?'Con esto cuadra':'Cuadra perfecto'}</div>`;return}
+  const cc=/Corriente/i.test(r.c), hoyIso=isoLocal(hoy), ini=isoLocal(new Date(hoy.getFullYear(),hoy.getMonth(),1));
+  const add=(o)=>`cuadre[${i}].movs.push(${esc(JSON.stringify(o))});pintarCq(${i})`;
+  el.innerHTML=`<div class="alerta txt ${d<0?'al':'info'}" style="margin-top:8px;cursor:default"><span>${d<0?`Faltan <b>${fmt(-d)}</b> que salieron sin aviso`:`En el banco hay <b>${fmt(d)}</b> más que en la app`}</span></div>
+    <div class="mini" style="margin:2px 2px 6px">¿Qué fue?</div>
+    <div class="chips" style="margin:0;flex-wrap:wrap">
+      ${d<0&&cc?`<button class="chip" onclick='${add({tipo:'Egreso',descripcion:'Intereses línea de crédito',categoria:CAT_INT,monto:-d,fecha:ini})}'>🏦 Intereses de la línea</button>`:''}
+      ${d<0?`<button class="chip" onclick='${add({tipo:'Egreso',descripcion:'',categoria:'Transferencias',monto:-d,fecha:hoyIso})}'>💸 Transferencia o gasto</button>
+        <button class="chip" onclick='${add({tipo:'Egreso',descripcion:'Comisión del banco',categoria:CAT_INT,monto:-d,fecha:hoyIso})}'>🧾 Comisión</button>`
+      :`<button class="chip" onclick='${add({tipo:'Ingreso',descripcion:'',categoria:'Otros ingresos',monto:d,fecha:hoyIso})}'>💰 Me entró plata</button>`}
+    </div>
+    <div class="mini" style="margin-top:6px">Si no sabes qué fue, guarda igual: el saldo queda como el del banco, pero esa diferencia no aparecerá en tus gastos.</div>`;
+}
+async function guardarCuadre(b){
+  const R=cuadre.filter(r=>r.banco!=='');if(!R.length){toast('Escribe al menos un saldo');return}
+  if(R.some(r=>r.movs.some(m=>!String(m.descripcion).trim()))){toast('Ponle nombre a cada movimiento');return}
+  b.disabled=true;b.textContent='Guardando…';
+  try{
+    if(R.some(r=>r.movs.some(m=>m.categoria===CAT_INT))&&!D.categorias.includes(CAT_INT))D=await call('guardarCategoria',{nombre:CAT_INT,icono:'🏦',tipo:'Gasto',anterior:''});
+    for(const r of R)D=await call('cuadrarCuenta',r.c,Number(r.banco),r.movs.map(m=>({...m,monto:Number(m.monto)||0})));
+    cerrar();render();toast('Cuentas cuadradas ✓');
+  }catch(e){b.disabled=false;b.textContent='Guardar'}
+}
+function cuadreViejo(){
+  const ini=new Date(hoy.getFullYear(),hoy.getMonth(),1);
+  const A=ctasSaldo().map(c=>(D.saldos||{})[c]).filter(Boolean);
+  return A.length&&A.some(a=>new Date(a.fecha)<ini);
+}
+
+/* ===================== A2 · Intereses de la línea (no llegan por correo) ===================== */
+const interesesMes=d=>D.movs.filter(x=>x.tipo==='Egreso'&&padre(x.categoria)===CAT_INT&&mismoMes(new Date(x.fecha),d)).reduce((a,x)=>a+clp(x),0);
+const usoLineaMes=d=>D.movs.filter(x=>x.tipo==='Interno'&&/uso\s+l[ií]nea/i.test(x.descripcion)&&mismoMes(new Date(x.fecha),d)).reduce((a,x)=>a+clp(x),0);
+function estimarIntereses(){
+  const v=[1,2,3].map(i=>interesesMes(new Date(hoy.getFullYear(),hoy.getMonth()-i,1))).filter(x=>x>0);
+  return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):0;
+}
+function faltanIntereses(){
+  if(hoy.getDate()>15)return false;
+  const prev=new Date(hoy.getFullYear(),hoy.getMonth()-1,1);
+  if(!(usoLineaMes(prev)>0||interesesMes(prev)>0))return false;
+  return interesesMes(hoy)===0;
+}
+function agregarIntereses(){
+  const est=estimarIntereses();
+  abrirSheet(`<h3>🏦 Intereses de la línea de crédito</h3>
+    <div class="mini">El banco los cobra a principios de mes y <b>no avisa por correo</b>. Búscalos en la cartola de tu cuenta corriente${est?` (los últimos meses fueron ≈ ${fmt(est)})`:''}.</div>
+    <div class="row"><div style="flex:1"><label>Intereses</label><input class="in" id="iInt" inputmode="numeric" placeholder="Ej: 12035"></div>
+      <div style="flex:1"><label>Impuesto</label><input class="in" id="iImp" inputmode="numeric" placeholder="Ej: 239"></div></div>
+    <label>Fecha del cargo</label><input class="in" type="date" id="iFec" value="${isoLocal(new Date(hoy.getFullYear(),hoy.getMonth(),1))}">
+    <button class="btn" onclick="guardarIntereses(this)">Guardar</button><button class="btn sec" onclick="cerrar()">Cancelar</button>`);
+}
+async function guardarIntereses(b){
+  const n=id=>Number(String(document.getElementById(id).value).replace(/\D/g,''))||0, I=n('iInt'), T=n('iImp'), f=document.getElementById('iFec').value;
+  if(!I&&!T){toast('Escribe al menos los intereses');return}
+  b.disabled=true;b.textContent='Guardando…';
+  try{
+    if(!D.categorias.includes(CAT_INT))D=await call('guardarCategoria',{nombre:CAT_INT,icono:'🏦',tipo:'Gasto',anterior:''});
+    const medio=medioDe(ctaCC()||'Banco de Chile · Cuenta Corriente');
+    for(const [m,d] of [[I,'Intereses línea de crédito'],[T,'Impuesto línea de crédito']])
+      if(m)D=await call('agregarMovimiento',{tipo:'Egreso',monto:m,descripcion:d,categoria:CAT_INT,fecha:f,medio,nota:'Agregado a mano: el banco no avisa por correo',proyecto:''});
+    cerrar();render();toast('Intereses agregados ✓');
+  }catch(e){b.disabled=false;b.textContent='Guardar'}
+}
+
+/* ===================== A3 · Me deben ===================== */
+function deudasPend(){return (D.meDeben||[]).map(d=>{const pagado=(d.pagos||[]).reduce((a,p)=>a+(Number(p.monto)||0),0);return {...d,pagado,pend:Math.max(0,d.monto-pagado)}})}
+function porPersona(){const g={};deudasPend().forEach(d=>{const k=d.persona;g[k]=g[k]||{persona:k,pend:0,total:0,L:[]};g[k].pend+=d.pend;g[k].total+=d.monto;g[k].L.push(d)});return Object.values(g).sort((a,b)=>b.pend-a.pend)}
+const movsVinculados=()=>new Set((D.meDeben||[]).flatMap(d=>(d.pagos||[]).map(p=>p.idMov)).filter(Boolean));
+const nombreTransf=x=>String(x.descripcion||'').replace(/^Transf\.?\s*(de|a)\s*/i,'').trim();
+const mismaPersona=(p,desc)=>{const a=normJS(p).split(' ').filter(w=>w.length>2),b=' '+normJS(desc)+' ';return a.length&&a.every(w=>b.includes(' '+w+' '))||a.length&&b.includes(' '+a[0]+' ')&&a.length===1};
+function meDebenHTML(){
+  const P=porPersona(),ab=P.filter(p=>p.pend>0),tot=ab.reduce((a,p)=>a+p.pend,0),ok=P.length-ab.length;
+  return `<div class="card"><div class="sync" style="color:var(--text)"><h2 style="margin:0">👥 Me deben</h2>${tot?`<b class="ing" style="font-size:18px">${fmt(tot)}</b>`:''}</div>
+    ${ab.length?ab.map(p=>`<div class="cta" onclick="verPersona('${esc(p.persona)}')"><span>${esc(p.persona)}<br><span class="mini">${p.L.filter(d=>d.pend).map(d=>esc(d.concepto||'Préstamo')).join(' · ')}</span></span><b class="ing">${fmt(p.pend)} ›</b></div>`).join('')
+      :`<div class="mini" style="margin:6px 2px">Anota aquí cuando pagas algo por otros o prestas plata. Cuando te devuelvan, la transferencia se descuenta de la deuda y no se cuenta como ingreso.</div>`}
+    ${ok?`<div class="mini" style="margin:6px 2px">${ok} persona(s) ya te pagaron todo · <button class="link" onclick="verPagadas()">ver</button></div>`:''}
+    <button class="btn sec" style="margin-top:8px" onclick="nuevaDeuda({})">＋ Alguien me debe</button></div>`;
+}
+function verPagadas(){const P=porPersona().filter(p=>!p.pend);abrirSheet(`<h3>Ya te pagaron</h3>${P.map(p=>`<div class="cta" onclick="verPersona('${esc(p.persona)}')"><span>${esc(p.persona)}</span><b>${fmt(p.total)} ✓</b></div>`).join('')}<button class="btn sec" onclick="cerrar()">Cerrar</button>`)}
+function nuevaDeuda(o){
+  const personas=[...new Set((D.meDeben||[]).map(d=>d.persona).concat(D.movs.filter(x=>/^Transf\./i.test(x.descripcion)).map(nombreTransf)))].filter(Boolean).slice(0,200);
+  abrirSheet(`<h3>👥 Alguien me debe</h3>
+    ${o.concepto?`<div class="mini">Por: <b>${esc(o.concepto)}</b> (${fmt(o.monto)}). Escribe solo la parte que te deben.</div>`:''}
+    <label>¿Quién?</label><input class="in" id="dPer" list="dPersonas" value="${esc(o.persona||'')}" placeholder="Ej: Juan Pablo Lorca"><datalist id="dPersonas">${personas.map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
+    <div class="row"><div style="flex:1"><label>¿Cuánto?</label><input class="in" id="dMon" inputmode="numeric" value="${o.parte||''}" placeholder="0"></div>
+      <div style="flex:1"><label>Fecha</label><input class="in" type="date" id="dFec" value="${o.fecha||isoLocal(hoy)}"></div></div>
+    <label>¿Por qué?</label><input class="in" id="dCon" value="${esc(o.concepto||'')}" placeholder="Ej: asado, entrada al concierto, préstamo">
+    <button class="btn" onclick="guardarDeudaUI(this,'${esc(o.idMov||'')}')">Guardar</button><button class="btn sec" onclick="cerrar()">Cancelar</button>`);
+  setTimeout(()=>{const e=document.getElementById(o.persona?'dMon':'dPer');e&&e.focus()},60);
+}
+async function guardarDeudaUI(b,idMov){
+  const persona=document.getElementById('dPer').value.trim(),monto=Number(document.getElementById('dMon').value.replace(/\D/g,''))||0;
+  if(!persona||!monto){toast('Completa quién y cuánto');return}
+  b.disabled=true;b.textContent='Guardando…';
+  try{D=await call('guardarDeuda',{persona,monto,fecha:document.getElementById('dFec').value,concepto:document.getElementById('dCon').value,idMov});cerrar();render();toast(`Anotado: ${persona} te debe ${fmt(monto)}`)}catch(e){b.disabled=false;b.textContent='Guardar'}
+}
+function verPersona(p){
+  const g=porPersona().find(x=>x.persona===p);if(!g){cerrar();return}
+  abrirSheet(`<h3>${esc(p)}</h3><div class="mini">${g.pend?`Te debe <b class="ing">${fmt(g.pend)}</b>`:'Ya te pagó todo ✓'}</div>
+    ${g.L.map(d=>`<div class="card" style="margin-top:10px">
+      <div class="sync" style="color:var(--text)"><b>${esc(d.concepto||'Préstamo')}</b><b>${fmt(d.monto)}</b></div>
+      <div class="mini">${d.fecha?fCorta(d.fecha+'T12:00'):''}${d.pagado?` · pagado ${fmt(d.pagado)}`:''}${d.pend?` · falta <b>${fmt(d.pend)}</b>`:' · ✓ pagado'}</div>
+      ${(d.pagos||[]).map(pg=>{const m=D.movs.find(x=>x.id===pg.idMov);return `<div class="kv"><span class="mini">↩️ ${m?esc(m.descripcion)+' · '+fCorta(m.fecha):'Pago en efectivo u otro'}</span><span class="mini">${fmt(pg.monto)} <button class="x" onclick="quitarPago('${esc(d.id)}','${esc(pg.idMov)}','${esc(p)}')">✕</button></span></div>`}).join('')}
+      <div class="sync" style="margin-top:8px">${d.pend?`<button onclick="elegirPago('${esc(d.id)}')">↩️ Registrar pago</button>`:'<span></span>'}<button onclick="borrarDeuda('${esc(d.id)}','${esc(p)}')">Eliminar</button></div>
+    </div>`).join('')}
+    <button class="btn sec" onclick="nuevaDeuda({persona:'${esc(p)}'})">＋ Me debe algo más</button><button class="btn sec" onclick="cerrar()">Cerrar</button>`);
+}
+function candidatosPago(d){
+  const usados=movsVinculados(),lim=Date.now()-200*864e5;
+  return D.movs.filter(x=>x.tipo==='Ingreso'&&x.categoria!=='Sueldo'&&!usados.has(x.id)&&new Date(x.fecha)>lim)
+    .map(x=>({x,s:(mismaPersona(d.persona,x.descripcion)?2:0)+(Math.abs(clp(x)-d.pend)<1?1:0)}))
+    .sort((a,b)=>b.s-a.s||new Date(b.x.fecha)-new Date(a.x.fecha)).slice(0,12);
+}
+function elegirPago(id){
+  const d=deudasPend().find(k=>k.id===id);if(!d)return;
+  const C=candidatosPago(d);
+  abrirSheet(`<h3>↩️ ¿Cómo te pagó ${esc(d.persona)}?</h3><div class="mini">Le falta ${fmt(d.pend)} por «${esc(d.concepto||'préstamo')}». Elige la transferencia que te hizo: dejará de contarse como ingreso.</div>
+    <div style="margin-top:10px">${C.map(({x,s})=>`<div class="cta" onclick="registrarPago('${esc(id)}','${esc(x.id)}',${Math.min(clp(x),d.pend)})"><span>${s>=2?'⭐ ':''}${esc(x.descripcion)}<br><span class="mini">${fCorta(x.fecha)} · ${esc(corto(cuentaDe(x)))}</span></span><b class="ing">${fmt(clp(x))}</b></div>`).join('')||'<div class="empty">No encontré transferencias recibidas</div>'}</div>
+    <label>O me pagó en efectivo / de otra forma</label><div class="row"><input class="in" id="pEf" inputmode="numeric" value="${d.pend}"><button class="btn" style="margin-top:0;width:auto" onclick="registrarPago('${esc(id)}','',Number(document.getElementById('pEf').value.replace(/\\D/g,''))||0)">Registrar</button></div>
+    <button class="btn sec" onclick="verPersona('${esc(d.persona)}')">Volver</button>`);
+}
+async function registrarPago(id,idMov,monto){
+  const d=deudasPend().find(k=>k.id===id);if(!monto){toast('Escribe el monto');return}
+  try{D=await call('pagarDeuda',id,idMov,monto,false);render();toast('Pago registrado ✓');verPersona(d.persona)}catch(e){}
+}
+async function quitarPago(id,idMov,p){try{D=await call('pagarDeuda',id,idMov,0,true);render();verPersona(p)}catch(e){}}
+async function borrarDeuda(id,p){if(!confirmar('¿Eliminar esta deuda?'))return;try{D=await call('eliminarDeuda',id);render();verPersona(p)}catch(e){}}
+function confirmar(t){try{return window.confirm(t)}catch(e){return true}}
+/* Sugerencia automática: llegó una transferencia de alguien que te debe */
+function pagosSugeridos(){
+  const ab=deudasPend().filter(d=>d.pend>0);if(!ab.length)return [];
+  const usados=movsVinculados(),ign=new Set((lsGet('pagoIgn')||'').split(',')),lim=Date.now()-60*864e5,out=[];
+  D.movs.filter(x=>x.tipo==='Ingreso'&&x.categoria!=='Sueldo'&&!usados.has(x.id)&&!ign.has(x.id)&&new Date(x.fecha)>lim).forEach(x=>{
+    const d=ab.find(d=>mismaPersona(d.persona,x.descripcion)&&new Date(x.fecha)>=new Date((d.fecha||'2000-01-01')+'T00:00'));if(d)out.push({d,x})});
+  return out;
+}
+function confirmarPagoSug(i){
+  const s=pagosSugeridos()[i];if(!s)return;const {d,x}=s;
+  abrirSheet(`<h3>↩️ ¿${esc(d.persona)} te pagó?</h3><div style="font-size:15px;margin:8px 0">Recibiste <b class="ing">${fmt(clp(x))}</b> el ${fCorta(x.fecha)} («${esc(x.descripcion)}»). ${esc(d.persona)} te debe <b>${fmt(d.pend)}</b> por «${esc(d.concepto||'préstamo')}».</div>
+    <button class="btn" onclick="cerrar();registrarPago('${esc(d.id)}','${esc(x.id)}',${Math.min(clp(x),d.pend)})">Sí, es su pago</button>
+    <button class="btn sec" onclick="lsSet('pagoIgn',(lsGet('pagoIgn')||'')+',${esc(x.id)}');cerrar();render()">No, es otra cosa</button>`);
+}
+function elegirDeudaParaMov(idMov){
+  const x=D.movs.find(m=>m.id===idMov),ab=deudasPend().filter(d=>d.pend>0).sort((a,b)=>(mismaPersona(b.persona,x.descripcion)?1:0)-(mismaPersona(a.persona,x.descripcion)?1:0));
+  abrirSheet(`<h3>↩️ ¿De qué deuda es este pago?</h3><div class="mini">${esc(x.descripcion)} · ${fmt(clp(x))}</div>
+    <div style="margin-top:10px">${ab.map(d=>`<div class="cta" onclick="cerrar();registrarPago('${esc(d.id)}','${esc(idMov)}',${Math.min(clp(x),d.pend)})"><span>${esc(d.persona)}<br><span class="mini">${esc(d.concepto||'Préstamo')}</span></span><b>${fmt(d.pend)}</b></div>`).join('')}</div>
+    <button class="btn sec" onclick="cerrar()">Cancelar</button>`);
+}
+
+/* ===================== B4 · ¿Cuándo llega a $0 la cuenta corriente? ===================== */
+function ceroCC(){
+  const c=ctaCC();if(!c||!esteMes())return null;const v=saldoCta(c);if(!v)return null;
+  const fin=new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate(), d0=hoy.getDate();
+  const F=fijos(), kf=new Set(F.filter(f=>f.tipo==='Egreso').map(f=>f.k));
+  const t60=new Date(hoy.getTime()-60*864e5);
+  const vari=D.movs.filter(x=>x.tipo==='Egreso'&&cuentaDe(x)===c&&medioTipo(x)!=='Crédito'&&!x.proyecto&&!kf.has(claveFijo(x))&&clp(x)<150000&&new Date(x.fecha)>=t60&&new Date(x.fecha)<hoy).reduce((a,x)=>a+clp(x),0);
+  const diario=vari/60;
+  const fijosCC=F.filter(f=>f.tipo==='Egreso'&&!f.pagado&&f.dia>d0).filter(f=>{const m=D.movs.slice().reverse().find(x=>claveFijo(x)===f.k);return m&&cuentaDe(m)===c});
+  let s=v.s,dia=null;
+  for(let d=d0+1;d<fin;d++){s-=diario;fijosCC.filter(f=>Math.min(f.dia,fin)===d).forEach(f=>s-=f.monto);if(s<0&&dia===null)dia=d}
+  if(dia===null)return {ok:true,s,diario};
+  const dias=Math.max(1,fin-d0-1);
+  return {ok:false,dia,s,diario,recorte:Math.ceil(-s/dias/100)*100,saldo:v.s};
+}
+
+/* ===================== B5 · Panel de deuda unificado ===================== */
+function deudaHTML(){
+  const deu=deudas(), tc=deu.tc?deu.tc.total:0, ln=deu.linea?deu.linea.base:0, tot=tc+ln, y=hoy.getFullYear();
+  const intAno=D.movs.filter(x=>x.tipo==='Egreso'&&padre(x.categoria)===CAT_INT&&new Date(x.fecha).getFullYear()===y).reduce((a,x)=>a+clp(x),0);
+  const pl=D.planTarjeta, c=pl?calcPlan(pl,pl.extra):null, alt=pl?calcPlan(pl,pl.extra+100000):null, z=ceroCC(), est=estimarIntereses();
+  const meses=c?c.filas.length:0, intMes=intAno/Math.max(1,hoy.getMonth()+1);
+  return `<div class="card"><h2>Tus deudas</h2>
+    <div class="sync" style="color:var(--text);margin-bottom:6px"><span class="mini">Total que debes hoy (estimado)</span><b class="egr" style="font-size:24px;font-variant-numeric:tabular-nums">${fmt(tot)}</b></div>
+    <div class="cta" onclick="verMedio('Crédito')"><span>💳 Tarjeta de crédito</span><b class="egr">${deu.tc?fmt(tc):'Sin datos'}</b></div>
+    ${deu.tc?`<div class="mini" style="margin:-2px 4px 8px">Saldo que informó el banco al pagar el ${deu.tc.f} (${fmt(deu.tc.base)}) + compras posteriores (${fmt(deu.tc.nuevas)}).</div>`:''}
+    <div class="cta" style="cursor:default"><span>🏦 Línea de crédito</span><b class="${ln?'egr':'ing'}">${deu.linea?(ln?fmt(ln):'$0 ✓'):'Sin datos'}</b></div>
+    ${deu.linea?`<div class="mini" style="margin:-2px 4px 8px">Según tu último pago (${deu.linea.f}). Lo que uses después no llega por correo.</div>`:''}
+    <div class="kv"><span>Intereses y comisiones pagados en ${y}</span><b class="egr">${fmt(intAno)}</b></div>
+    ${intAno?`<div class="mini" style="margin:0 4px 6px">≈ ${fmt(intMes)} al mes que se van en deuda. <button class="link" onclick="verCat('${CAT_INT}')">Ver detalle</button></div>`:''}
+    ${z&&!z.ok?`<div class="alerta ex txt" style="cursor:default;margin-top:8px"><span>⚠️ Tu cuenta corriente llegaría a <b>$0 cerca del día ${z.dia}</b>, antes del sueldo. Desde ahí la línea cubre los gastos y cobra intereses${est?` (≈ ${fmt(est)} al mes)`:''}. Para evitarlo, gasta ≈ <b>${fmt(z.recorte)} menos al día</b> con débito.</span></div>`
+      :z&&z.ok?`<div class="okmsg" style="margin-top:8px">✓ Al ritmo actual tu cuenta corriente alcanza hasta el sueldo (quedarían ≈ ${fmt(z.s)})</div>`:''}
+    ${c?`<div class="kv" style="margin-top:6px"><span>Tarjeta en $0</span><b>${mesK(c.fin)} · ${meses} abono(s)</b></div>
+      ${alt.fin<c.fin?`<div class="mini" style="margin:0 4px">Si abonas ${fmt(pl.extra+100000)} al mes (en vez de ${fmt(pl.extra)}) terminas en ${mesK(alt.fin)}: ${c.fin-alt.fin} mes(es) antes.</div>`:''}`:''}
+    ${cuotasHTML()}</div>`;
+}
+
+/* ===================== D9 · Clasificar uno por uno ===================== */
+let modoClas=false;
+function verClasificar(){modoClas=true;pintarClas()}
+function pintarClas(){
+  const P=pendientes();
+  if(!P.length){abrirSheet(`<div style="text-align:center;padding:24px 8px"><div style="font-size:42px">🎉</div><h3>Todo clasificado</h3><div class="mini">Cuando lleguen compras nuevas que no reconozca, aparecerán aquí.</div></div><button class="btn" onclick="cerrar()">Listo</button>`);return}
+  abrirSheet(`<div class="sync" style="margin-bottom:8px"><h3 style="margin:0">Clasificar</h3><span class="mini">${P.length} pendiente(s)</span></div>${pendientesHTML()}<button class="btn sec" onclick="cerrar()">Terminar después</button>`);
+  initSwipe();
+}
+function usoCats(tipo){const c={},lim=Date.now()-180*864e5;D.movs.forEach(x=>{if(x.tipo===tipo&&new Date(x.fecha)>lim&&x.categoria!=='Por clasificar')c[x.categoria]=(c[x.categoria]||0)+1});return c}
+
+/* ===================== D10 · Suscripciones y pagos recurrentes ===================== */
+function suscripciones(){
+  const ini=new Date(hoy.getFullYear(),hoy.getMonth()-6,1), g={}, ym=f=>f.getFullYear()*12+f.getMonth();
+  const DIA=['Supermercado','Delivery','Comida y restaurantes','Transporte','Compras','Transferencias','Cancha',CAT_INT,'Gastos de Trabajo','Viajes','Reembolso','Por clasificar','Otros'];
+  D.movs.forEach(x=>{if(x.tipo!=='Egreso'||x.proyecto||DIA.includes(padre(x.categoria)))return;const f=new Date(x.fecha);if(f<ini)return;(g[claveFijo(x)]=g[claveFijo(x)]||[]).push({...x,f})});
+  const out=[];
+  Object.values(g).forEach(L=>{
+    const pm={};L.forEach(x=>{(pm[ym(x.f)]=pm[ym(x.f)]||[]).push(x)});
+    if(Object.keys(pm).length<2||Object.values(pm).some(a=>a.length>2))return;
+    const v=L.map(clp),mx=Math.max(...v),mn=Math.min(...v);if(mn<=0||mx/mn>1.5)return;
+    L.sort((a,b)=>b.f-a.f);const u=L[0],dias=(hoy-u.f)/864e5;
+    out.push({desc:u.descripcion,cat:u.categoria,monto:clp(u),anual:clp(u)*12,ult:u.f,activa:dias<=45,meses:Object.keys(pm).length,usd:u.moneda==='USD'});
+  });
+  return out.sort((a,b)=>b.activa-a.activa||b.monto-a.monto);
+}
+function suscripcionesHTML(){
+  const S=suscripciones();if(!S.length)return '';
+  const A=S.filter(s=>s.activa),m=A.reduce((a,s)=>a+s.monto,0);
+  return pleg('subs','Suscripciones y pagos recurrentes',`
+    <div class="sync" style="color:var(--text);margin-bottom:6px"><span class="mini">${A.length} activos</span><span><b class="egr">${fmt(m)}</b><span class="mini">/mes · ${fmt(m*12)} al año</span></span></div>
+    ${S.map(s=>`<div class="kv" style="${s.activa?'':'opacity:.55'}"><span style="min-width:0">${ico(s.cat)} ${esc(s.desc)}<br><span class="mini">${s.activa?`≈ ${fmt(s.anual)} al año`:'¿cancelada? no se cobra hace más de 45 días'} · último ${fCorta(s.ult)}${s.usd?' · en US$':''}</span></span><b class="egr" style="white-space:nowrap">${fmt(s.monto)}</b></div>`).join('')}
+    <div class="mini" style="margin-top:6px">Detectados porque se cobran todos los meses con un monto parecido. Revisa si de verdad usas cada uno: cancelar uno de ${fmt(10000)} te ahorra ${fmt(120000)} al año.</div>`);
+}
+
+/* ===================== D11 · Exportar el mes ===================== */
+function verExportar(){
+  abrirSheet(`<h3>⬇️ Exportar ${nombreMes(mes)}</h3><div class="mini">Todos los movimientos del mes con su categoría, cuenta y monto.</div>
+    <button class="btn" onclick="exportarCSV()">📊 Excel (CSV)</button>
+    <button class="btn sec" onclick="exportarPDF()">📄 Resumen en PDF / imprimir</button>
+    <button class="btn sec" onclick="cerrar()">Cancelar</button>`);
+}
+function descargar(nombre,texto,tipo){
+  const blob=new Blob([texto],{type:tipo});
+  try{const file=new File([blob],nombre,{type:tipo});if(matchMedia('(pointer:coarse)').matches&&navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file],title:nombre}).catch(()=>{});return}}catch(e){}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nombre;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000);
+}
+function exportarCSV(){
+  const L=delMes(mes).sort((a,b)=>a.f-b.f), q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const filas=[['Fecha','Tipo','Descripción','Categoría','Cuenta','Medio','Monto','Nota','Proyecto']].concat(L.map(x=>[isoLocal(x.fecha),x.tipo==='Egreso'?'Gasto':x.tipo==='Ingreso'?(x.categoria==='Reembolso'?'Reembolso':'Ingreso'):'Traspaso',x.descripcion,x.categoria,cuentaDe(x),medioTipo(x),Math.round((x.tipo==='Egreso'?-1:1)*clp(x)),x.nota,x.proyecto]));
+  descargar(`mis-finanzas-${mes.getFullYear()}-${String(mes.getMonth()+1).padStart(2,'0')}.csv`,'﻿'+filas.map(r=>r.map(q).join(';')).join('\r\n'),'text/csv;charset=utf-8');
+  toast('Archivo listo ✓');
+}
+function exportarPDF(){
+  const L=delMes(mes).sort((a,b)=>a.f-b.f), T=totales(L), F=flujoMes(L), cats={};
+  L.filter(x=>x.tipo==='Egreso').forEach(x=>{const p=padre(x.categoria);cats[p]=(cats[p]||0)+clp(x)});
+  const C=Object.entries(cats).sort((a,b)=>b[1]-a[1]);
+  let el=document.getElementById('printArea');if(!el){el=document.createElement('div');el.id='printArea';document.body.appendChild(el)}
+  el.innerHTML=`<h1>Mis Finanzas · ${esc(nombreMes(mes))}</h1>
+    <table><tr><td>Ingresos</td><td>${fmt(T.ing)}</td></tr><tr><td>Gastos</td><td>${fmt(T.egr)}</td></tr><tr><th>Ganaste − gastaste</th><th>${fmt(T.bal)}</th></tr></table>
+    <h2>Plata que te quedó</h2><table><tr><td>Entró a tus cuentas</td><td>${fmt(F.entro)}</td></tr>${F.reemb?`<tr><td>Te pagaron lo que te debían</td><td>${fmt(F.reemb)}</td></tr>`:''}<tr><td>Gastos con débito y efectivo</td><td>−${fmt(F.gastos)}</td></tr><tr><td>Pagos de tarjeta y línea</td><td>−${fmt(F.pagos)}</td></tr><tr><th>Te quedó</th><th>${fmt(F.queda)}</th></tr></table>
+    <h2>Gastos por categoría</h2><table>${C.map(([c,v])=>`<tr><td>${esc(c)}</td><td>${fmt(v)}</td><td>${Math.round(v/Math.max(1,T.egr+(F.reemb||0))*100)}%</td></tr>`).join('')}</table>
+    <h2>Movimientos</h2><table class="mv"><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Cuenta</th><th>Monto</th></tr>${L.map(x=>`<tr><td>${fCorta(x.fecha)}</td><td>${esc(x.descripcion)}</td><td>${esc(x.categoria)}</td><td>${esc(corto(cuentaDe(x)))}</td><td>${x.tipo==='Egreso'?'−':x.tipo==='Ingreso'?'+':''}${fmt(clp(x))}</td></tr>`).join('')}</table>
+    <button class="btn noprint" onclick="document.body.classList.remove('imprimiendo')">Volver a la app</button><p class="pie">Generado el ${new Date().toLocaleString('es-CL')} · Mis Finanzas</p>`;
+  cerrar();document.body.classList.add('imprimiendo');
+  const fin=()=>{document.body.classList.remove('imprimiendo');window.removeEventListener('afterprint',fin)};
+  window.addEventListener('afterprint',fin);setTimeout(()=>{try{window.print()}catch(e){toast('Tu navegador no permite imprimir aquí');fin()}},100);
 }
 
 /* ===================== APP INSTALABLE: vínculo, bloqueo y ajustes ===================== */
