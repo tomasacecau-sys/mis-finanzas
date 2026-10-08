@@ -318,18 +318,38 @@ function totales(lista){
 
 // Saldo real de cada cuenta: el último saldo que ingresaste (el que ves en el banco) ± los movimientos posteriores.
 function ctasSaldo(){return cuentasLista().filter(c=>c!=='Efectivo'&&!/Tarjeta de Cr/i.test(c));}
+/* Deuda de la línea a una fecha: lo que quedó tras el último pago informado + usos que informó el banco después. */
+function lineaBaseAl(t){
+  const I=D.movs.filter(x=>x.tipo==='Interno'&&new Date(x.fecha)<=t);
+  const p=I.filter(x=>/Pago l[ií]nea/i.test(x.descripcion)&&x.saldo!==null&&x.saldo!==undefined).sort((a,b)=>new Date(b.fecha)-new Date(a.fecha))[0];
+  if(!p)return null;
+  const t1=new Date(p.fecha);
+  return Number(p.saldo)+I.filter(x=>/uso\s+l[ií]nea/i.test(x.descripcion)&&new Date(x.fecha)>t1).reduce((a,x)=>a+clp(x),0);
+}
+function deltaCta(x,c){   // cuánto cambia la cuenta c con el movimiento x
+  const m=clp(x),k=cuentaDe(x),d=String(x.descripcion||'');
+  if(x.tipo==='Interno'){
+    if(d.includes('→')){const p=d.replace(/^Traspaso\s*/i,'').split('→').map(t=>t.trim());let v=0;if(p[0]&&c.endsWith(p[0]))v-=m;else if(!p[0]&&k===c)v-=m;if(p[1]&&c.endsWith(p[1]))v+=m;return v}
+    if(k===c)return /desde|Uso l[ií]nea/i.test(d)?m:-m;
+    return 0;
+  }
+  return k===c&&medioTipo(x)!=='Crédito'?(x.tipo==='Ingreso'?m:-m):0;
+}
+/* Saldo real de cada cuenta: el último saldo que ingresaste (el que ves en el banco) ± los movimientos posteriores.
+   Cuenta corriente: nunca baja de $0. Si un pago la deja en negativo, la diferencia la cubre la línea de crédito
+   (sube la deuda de la línea); los pagos de la línea la bajan. */
 function saldoCta(c){
   const a=(D.saldos||{})[c];if(!a)return null;
-  const t0=new Date(a.fecha);let s=Number(a.saldo)||0;
-  D.movs.forEach(x=>{
-    if(new Date(x.fecha)<=t0)return;
-    const m=clp(x),k=cuentaDe(x),d=String(x.descripcion||'');
-    if(x.tipo==='Interno'){
-      if(d.includes('→')){const p=d.replace(/^Traspaso\s*/i,'').split('→').map(t=>t.trim());if(p[0]&&c.endsWith(p[0]))s-=m;else if(!p[0]&&k===c)s-=m;if(p[1]&&c.endsWith(p[1]))s+=m;}
-      else if(k===c){if(/desde|Uso l[ií]nea/i.test(d))s+=m;else s-=m;}
-    }else if(k===c&&medioTipo(x)!=='Crédito')s+=x.tipo==='Ingreso'?m:-m;
+  const t0=new Date(a.fecha), cc=/Cuenta Corriente/i.test(c);
+  let s=Number(a.saldo)||0, L=cc?(lineaBaseAl(t0)||0):0, cubierto=0;
+  D.movs.filter(x=>new Date(x.fecha)>t0).sort((x,y)=>new Date(x.fecha)-new Date(y.fecha)).forEach(x=>{
+    const d=String(x.descripcion||''), mia=cuentaDe(x)===c;
+    if(cc&&x.tipo==='Interno'&&mia&&/uso\s+l[ií]nea/i.test(d))return;          // ya lo cubrimos solos al quedar bajo $0
+    if(cc&&x.tipo==='Interno'&&mia&&/Pago l[ií]nea/i.test(d)){s-=clp(x);L=Math.max(0,L-clp(x))}
+    else s+=deltaCta(x,c);
+    if(cc&&s<0){L+=-s;cubierto+=-s;s=0}
   });
-  return {s,base:Number(a.saldo)||0,f:t0};
+  return {s,base:Number(a.saldo)||0,f:t0,linea:cc?L:null,cubierto};
 }
 function editSaldo(i){
   const c=ctasSaldo()[i],v=saldoCta(c);
@@ -572,7 +592,9 @@ function alertas(){
   const sug=sugerirReembolsos();if(sug.length)A.push({cls:'info',txt:`↩️ ${sug.length===1?'Hay transferencias':'Hay grupos de transferencias'} que podrían ser reembolsos`,go:`verReembolsos()`});
   if(hoy.getDate()<=7){const m=new Date(hoy.getFullYear(),hoy.getMonth()-1,1),k=m.getFullYear()+'-'+m.getMonth();if(lsGet('resumenVisto')!==k&&delMes(m).length)A.unshift({cls:'info',txt:`📊 Tu resumen de ${m.toLocaleDateString('es-CL',{month:'long'})} está listo`,go:`verResumenMes(-1)`})}
   if(esteMes()){
-    const z=ceroCC();if(z&&!z.ok)A.push({cls:z.dia-hoy.getDate()<=5?'ex':'al',txt:`⚠️ Tu cuenta corriente llegaría a $0 cerca del día ${z.dia}, antes del sueldo`,go:`ir('pro')`});
+    const vcc=ctaCC()?saldoCta(ctaCC()):null;
+    if(vcc&&vcc.linea>0)A.push({cls:'ex',txt:`🏦 Estás usando ${fmt(vcc.linea)} de la línea de crédito${vcc.cubierto?` (cubrió ${fmt(vcc.cubierto)} cuando tu cuenta quedó en $0)`:''}: genera intereses`,go:`ir('pro')`});
+    const z=ceroCC();if(z&&!z.ok&&!(vcc&&vcc.linea>0&&vcc.s<1))A.push({cls:z.dia-hoy.getDate()<=5?'ex':'al',txt:`⚠️ Tu cuenta corriente llegaría a $0 cerca del día ${z.dia}, antes del sueldo`,go:`ir('pro')`});
     if(faltanIntereses()){const e=estimarIntereses();A.push({cls:'al',txt:`🏦 ¿Ya te cobraron los intereses de la línea?${e?` (≈ ${fmt(e)})`:''} Agrégalos`,go:`agregarIntereses()`})}
     if(cuadreViejo())A.push({cls:'info',txt:`🧮 Cuadra tus cuentas con el banco (1 minuto)`,go:`verCuadre()`});
     pagosSugeridos().forEach((s,i)=>A.push({cls:'info',txt:`↩️ ¿${esc(s.d.persona)} te pagó ${fmt(clp(s.x))}?`,go:`confirmarPagoSug(${i})`}));
@@ -587,7 +609,8 @@ function verCuentas(){
   document.getElementById('sheet').innerHTML=`<h3>Tus cuentas</h3><div class="mini">Saldo real: el último que ingresaste ± los movimientos posteriores. Toca una para corregirla.</div>
     <div style="margin-top:10px">${r.map(x=>`<div class="cta" onclick="editSaldo(${x.i})"><span>${esc(x.c)}</span><b>${x.v?fmt(x.v.s):'Ingresar'}</b></div>`).join('')}</div>
     <div class="kv tot"><span>Disponible</span><span class="${tot>=0?'ing':'egr'}">${fmt(tot)}</span></div>
-    ${deu.tc?`<div class="kv"><span>Deuda tarjeta (estimada)</span><span class="egr">-${fmt(deu.tc.total)}</span></div><div class="kv tot"><span>Patrimonio líquido</span><span class="${tot-deu.tc.total>=0?'ing':'egr'}">${fmt(tot-deu.tc.total)}</span></div>`:''}
+    ${(()=>{const v=r.find(x=>/Corriente/i.test(x.c)&&x.v);return v&&v.v.linea>0?`<div class="kv"><span>Línea de crédito usada (estimada)</span><span class="egr">-${fmt(v.v.linea)}</span></div>`:''})()}
+    ${deu.tc?`<div class="kv"><span>Deuda tarjeta (estimada)</span><span class="egr">-${fmt(deu.tc.total)}</span></div>`:''}${(()=>{const dt=(deu.tc?deu.tc.total:0)+(deu.linea?deu.linea.base:0);return dt?`<div class="kv tot"><span>Patrimonio líquido</span><span class="${tot-dt>=0?'ing':'egr'}">${fmt(tot-dt)}</span></div>`:''})()}
     <button class="btn" onclick="verCuadre()">🧮 Cuadrar con el banco</button>
     <div class="mini" style="margin-top:12px">Este mes: entraron ${fmt(T.ing)} y gastaste ${fmt(T.egr)} (resultado ${fmt(T.bal)}). El resultado no es plata disponible: el sueldo de fin de mes cuenta para el mes siguiente.</div>
     <button class="btn sec" onclick="cerrar()">Cerrar</button>`;
@@ -813,7 +836,10 @@ function deudas(){
   const pLn=ord.find(x=>x.tipo==='Interno'&&/Pago l[ií]nea/i.test(x.descripcion)&&x.saldo!==null&&x.saldo!==undefined);
   let tc=null;
   if(pTC){const t0=new Date(pTC.fecha);const nuevas=D.movs.filter(x=>x.tipo==='Egreso'&&medioTipo(x)==='Crédito'&&new Date(x.fecha)>t0).reduce((a,x)=>a+clp(x),0);tc={base:pTC.saldo,nuevas,total:pTC.saldo+nuevas,f:f(pTC.fecha)};}
-  return {tc,linea:pLn?{base:pLn.saldo,f:f(pLn.fecha)}:null};
+  let linea=pLn?{base:pLn.saldo,f:f(pLn.fecha),cubierto:0}:null;
+  const cc=ctasSaldo().find(c=>/Cuenta Corriente/i.test(c)), v=cc?saldoCta(cc):null;
+  if(v&&(pLn||v.cubierto))linea={base:Math.round(v.linea),f:pLn?f(pLn.fecha):'—',cubierto:Math.round(v.cubierto),est:true};
+  return {tc,linea};
 }
 async function clasificar(id,sel){
   if(!sel.value)return;sel.disabled=true;
@@ -1545,7 +1571,7 @@ function deudaHTML(){
     <div class="cta" onclick="verMedio('Crédito')"><span>💳 Tarjeta de crédito</span><b class="egr">${deu.tc?fmt(tc):'Sin datos'}</b></div>
     ${deu.tc?`<div class="mini" style="margin:-2px 4px 8px">Saldo que informó el banco al pagar el ${deu.tc.f} (${fmt(deu.tc.base)}) + compras posteriores (${fmt(deu.tc.nuevas)}).</div>`:''}
     <div class="cta" style="cursor:default"><span>🏦 Línea de crédito</span><b class="${ln?'egr':'ing'}">${deu.linea?(ln?fmt(ln):'$0 ✓'):'Sin datos'}</b></div>
-    ${deu.linea?`<div class="mini" style="margin:-2px 4px 8px">Según tu último pago (${deu.linea.f}). Lo que uses después no llega por correo.</div>`:''}
+    ${deu.linea?`<div class="mini" style="margin:-2px 4px 8px">${deu.linea.cubierto&&deu.linea.base?`Estimado: incluye ${fmt(deu.linea.cubierto)} que la línea cubrió cuando tu cuenta corriente quedó en $0. `:''}Último pago informado: ${deu.linea.f}. Cuando pagas la línea, la deuda baja.</div>`:''}
     <div class="kv"><span>Intereses y comisiones pagados en ${y}</span><b class="egr">${fmt(intAno)}</b></div>
     ${intAno?`<div class="mini" style="margin:0 4px 6px">≈ ${fmt(intMes)} al mes que se van en deuda. <button class="link" onclick="verCat('${CAT_INT}')">Ver detalle</button></div>`:''}
     ${z&&!z.ok?`<div class="alerta ex txt" style="cursor:default;margin-top:8px"><span>⚠️ Tu cuenta corriente llegaría a <b>$0 cerca del día ${z.dia}</b>, antes del sueldo. Desde ahí la línea cubre los gastos y cobra intereses${est?` (≈ ${fmt(est)} al mes)`:''}. Para evitarlo, gasta ≈ <b>${fmt(z.recorte)} menos al día</b> con débito.</span></div>`
